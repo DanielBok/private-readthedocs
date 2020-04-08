@@ -1,7 +1,6 @@
 package database
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"strings"
@@ -11,12 +10,13 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/golang-migrate/migrate/v4/source/github"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 )
 
 type Database struct {
-	db *sql.DB
+	db *sqlx.DB
 }
 
 type DbOption struct {
@@ -26,6 +26,10 @@ type DbOption struct {
 	Password string
 	DbName   string
 	SSLMode  string
+}
+
+type Tx struct {
+	*sqlx.Tx
 }
 
 func (o *DbOption) ConnectionString(mask bool) string {
@@ -46,7 +50,7 @@ func (o *DbOption) ConnectionString(mask bool) string {
 func New(option *DbOption) (*Database, error) {
 	wait := 1
 	for i := 1; i < 10; i++ {
-		db, err := sql.Open("postgres", option.ConnectionString(false))
+		db, err := sqlx.Connect("postgres", option.ConnectionString(false))
 		if err == nil {
 			return &Database{db}, nil
 		}
@@ -58,7 +62,7 @@ func New(option *DbOption) (*Database, error) {
 }
 
 func (d *Database) Migrate() error {
-	driver, err := postgres.WithInstance(d.db, &postgres.Config{})
+	driver, err := postgres.WithInstance(d.db.DB, &postgres.Config{})
 	if err != nil {
 		return errors.Wrap(err, "could not create database driver")
 	}
@@ -67,7 +71,6 @@ func (d *Database) Migrate() error {
 	if err != nil {
 		return errors.Wrap(err, "could not generate migration files")
 	}
-	log.Printf("Source URL: %s", sourceUrl)
 
 	m, err := migrate.NewWithDatabaseInstance(sourceUrl, "postgres", driver)
 	if err != nil {
@@ -82,4 +85,16 @@ func (d *Database) Migrate() error {
 
 func (d *Database) Close() error {
 	return d.db.Close()
+}
+
+func (d *Database) MustBegin() Tx {
+	tx := d.db.MustBegin()
+	return Tx{tx}
+}
+
+func (t *Tx) Rollback() {
+	err := t.Tx.Rollback()
+	if err != nil {
+		log.Printf("error rolling back transaction: %v", err)
+	}
 }
