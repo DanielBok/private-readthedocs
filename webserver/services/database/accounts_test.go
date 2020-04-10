@@ -9,10 +9,7 @@ import (
 	. "private-sphinx-docs/services/database"
 )
 
-const (
-	testDoc1      = "Document1"
-	adminUsername = "admin"
-)
+const admin = "admin"
 
 func TestNewAccount(t *testing.T) {
 	t.Parallel()
@@ -82,7 +79,7 @@ func TestDatabase_FetchAccount(t *testing.T) {
 			Username string
 			HasError bool
 		}{
-			{adminUsername, false},
+			{admin, false},
 			{"user0", true},
 		} {
 			acc, err := db.FetchAccount(r.Username)
@@ -143,7 +140,7 @@ func TestDatabase_DeleteAccount(t *testing.T) {
 			Username string
 			HasError bool
 		}{
-			{adminUsername, false},
+			{admin, false},
 			{"UserDoesNotExist", true},
 		} {
 			err := db.DeleteAccount(r.Username)
@@ -165,7 +162,7 @@ func mockAccounts() ([]*Account, error) {
 		Password string
 		IsAdmin  bool
 	}{
-		{adminUsername, "password", true},
+		{admin, "password", true},
 		{"user1  ", "password", false},
 		{"user2", "password", false},
 	} {

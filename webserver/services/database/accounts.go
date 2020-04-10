@@ -5,12 +5,12 @@ import (
 )
 
 type Account struct {
-	Id        int         `json:"id"`
-	Username  string      `json:"username"`
-	Password  string      `json:"password,omitempty"`
-	IsAdmin   bool        `json:"isAdmin" db:"is_admin"`
-	Documents []*Document `json:"documents"`
-	db        *Database   `json:"-" db:"-"`
+	Id       int        `json:"id"`
+	Username string     `json:"username"`
+	Password string     `json:"password,omitempty"`
+	IsAdmin  bool       `json:"isAdmin" db:"is_admin"`
+	Projects []*Project `json:"projects"`
+	db       *Database  `json:"-" db:"-"`
 }
 
 func NewAccount(username, password string, isAdmin bool) (*Account, error) {
@@ -43,13 +43,23 @@ func (u *Account) HasValidPassword(password string) bool {
 	return u.Password == password
 }
 
-func (u *Account) FetchDocuments() ([]*Document, error) {
-	docs, err := u.db.FetchDocuments(u.Id)
+func (u *Account) FetchProjects() ([]*Project, error) {
+	projects, err := u.db.FetchProjects(u.Id)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not fetch documents from %s", u.Username)
+		return nil, errors.Wrapf(err, "could not fetch projects from %s", u.Username)
 	}
-	u.Documents = docs
-	return docs, nil
+	u.Projects = projects
+	return projects, nil
+}
+
+func (u *Account) FetchProject(name string) (*Project, error) {
+	proj, err := u.db.FetchProject(name)
+	if err != nil {
+		return nil, err
+	} else if proj.AccountId != u.Id {
+		return nil, errors.Errorf("user does not own project: '%s'", name)
+	}
+	return proj, nil
 }
 
 func (d *Database) FetchAccount(username string) (*Account, error) {

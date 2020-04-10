@@ -9,12 +9,14 @@ import (
 	. "private-sphinx-docs/services/database"
 )
 
-func TestNewDocument(t *testing.T) {
+const project1 = "Project1"
+
+func TestNewProject(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
 	for _, r := range []struct {
-		Name      string
+		Title     string
 		AccountId int
 		HasError  bool
 	}{
@@ -22,127 +24,127 @@ func TestNewDocument(t *testing.T) {
 		{"package", 0, true},
 		{"p", 1, true},
 	} {
-		doc, err := NewDocument(r.Name, r.AccountId)
+		proj, err := NewProject(r.Title, r.AccountId)
 		if r.HasError {
 			assert.Error(err)
 		} else {
 			assert.NoError(err)
-			assert.IsType(&Document{}, doc)
+			assert.IsType(&Project{}, proj)
 		}
 	}
 }
 
-func TestDatabase_CreateDocument(t *testing.T) {
+func TestDatabase_CreateProject(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
-	documents, err := mockDocuments()
+	projects, err := mockProjects()
 	assert.NoError(err)
 
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts)
 		assert.NoError(err)
-		acc, err := db.FetchAccount(adminUsername)
+		acc, err := db.FetchAccount(admin)
 		assert.NoError(err)
 
-		for _, d := range documents {
-			d.AccountId = acc.Id
-			doc, err := db.CreateDocument(d)
+		for _, p := range projects {
+			p.AccountId = acc.Id
+			proj, err := db.CreateProjects(p)
 			assert.NoError(err)
-			assert.IsType(&Document{}, doc)
+			assert.IsType(&Project{}, proj)
 		}
 
-		_, err = db.CreateDocument(documents[0])
-		assert.Error(err, "document already exists")
+		_, err = db.CreateProjects(projects[0])
+		assert.Error(err, "project already exists")
 
 		// test that validation raises errors
-		_, err = db.CreateDocument(&Document{
-			Name:      "",
+		_, err = db.CreateProjects(&Project{
+			Title:     "",
 			AccountId: acc.Id,
 		})
 		assert.Error(err, "validation failed")
 	})
 }
 
-func TestDatabase_FetchDocument(t *testing.T) {
+func TestDatabase_FetchProject(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
-		db, err := newTestDb(info, seedAccounts, seedDocuments)
+		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
 
 		for _, r := range []struct {
-			Name     string
+			Title    string
 			HasError bool
 		}{
-			{testDoc1, false},
+			{project1, false},
 			{"DoesNotExist", true},
 		} {
-			doc, err := db.FetchDocument(r.Name)
+			proj, err := db.FetchProject(r.Title)
 			if r.HasError {
 				assert.Error(err)
 			} else {
 				assert.NoError(err)
-				assert.IsType(&Document{}, doc)
+				assert.IsType(&Project{}, proj)
 			}
 		}
 	})
 }
 
-func TestDatabase_FetchDocuments(t *testing.T) {
+func TestDatabase_FetchProjects(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
-		db, err := newTestDb(info, seedAccounts, seedDocuments)
+		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
 
-		acc, err := db.FetchAccount(adminUsername)
+		acc, err := db.FetchAccount(admin)
 		assert.NoError(err)
 
-		docs, err := db.FetchDocuments(acc.Id)
+		projects, err := db.FetchProjects(acc.Id)
 		assert.NoError(err)
-		assert.Greater(len(docs), 0)
+		assert.Greater(len(projects), 0)
 	})
 }
 
-func TestDatabase_UpdateDocument(t *testing.T) {
+func TestDatabase_UpdateProject(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
-		db, err := newTestDb(info, seedAccounts, seedDocuments)
+		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
 
-		doc, err := db.FetchDocument(testDoc1)
+		proj, err := db.FetchProject(project1)
 		assert.NoError(err)
 
-		_, err = db.UpdateDocument(&Document{
-			Id:        doc.Id,
-			Name:      "NewName",
-			AccountId: doc.AccountId,
+		_, err = db.UpdateProject(&Project{
+			Id:        proj.Id,
+			Title:     "NewName",
+			AccountId: proj.AccountId,
 		})
 		assert.NoError(err)
 	})
 }
 
-func TestDatabase_DeleteDocument(t *testing.T) {
+func TestDatabase_DeleteProject(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
-		db, err := newTestDb(info, seedAccounts, seedDocuments)
+		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
 
 		for _, r := range []struct {
 			Name     string
 			HasError bool
 		}{
-			{testDoc1, false},
+			{project1, false},
 			{"DoesNotExist", true},
 		} {
-			err := db.DeleteDocument(r.Name)
+			err := db.DeleteProject(r.Name)
 			if r.HasError {
 				assert.Error(err)
 			} else {
@@ -153,39 +155,39 @@ func TestDatabase_DeleteDocument(t *testing.T) {
 }
 
 // Utilities here
-func mockDocuments() ([]*Document, error) {
-	var documents []*Document
+func mockProjects() ([]*Project, error) {
+	var projects []*Project
 
 	for _, v := range []struct {
-		Name      string
+		Title     string
 		AccountId int
 	}{
-		{testDoc1, 1},
-		{"Document2", 1},
+		{project1, 1},
+		{"Project2", 1},
 	} {
-		d, err := NewDocument(v.Name, v.AccountId)
+		d, err := NewProject(v.Title, v.AccountId)
 		if err != nil {
 			return nil, err
 		}
-		documents = append(documents, d)
+		projects = append(projects, d)
 	}
-	return documents, nil
+	return projects, nil
 }
 
-func seedDocuments(db *Database) error {
-	documents, err := mockDocuments()
+func seedProjects(db *Database) error {
+	projects, err := mockProjects()
 	if err != nil {
 		return err
 	}
 
-	acc, err := db.FetchAccount(adminUsername)
+	acc, err := db.FetchAccount(admin)
 	if err != nil {
 		return err
 	}
 
-	for _, d := range documents {
+	for _, d := range projects {
 		d.AccountId = acc.Id
-		_, err = db.CreateDocument(d)
+		_, err = db.CreateProjects(d)
 		if err != nil {
 			return err
 		}

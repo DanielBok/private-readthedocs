@@ -6,10 +6,10 @@ CREATE TABLE account
     is_admin BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE document
+CREATE TABLE project
 (
     id          SERIAL PRIMARY KEY,
-    name        VARCHAR(255) UNIQUE CHECK ( length(name) >= 1 ) NOT NULL,
+    title       VARCHAR(255) UNIQUE CHECK ( length(title) >= 1 ) NOT NULL,
     last_update TIMESTAMP DEFAULT NOW(),
     account_id  INT REFERENCES account (id) ON UPDATE CASCADE ON DELETE CASCADE
 );

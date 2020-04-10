@@ -1,3 +1,2 @@
-DROP TABLE IF EXISTS account_document;
-DROP TABLE IF EXISTS document;
+DROP TABLE IF EXISTS project;
 DROP TABLE IF EXISTS account;
