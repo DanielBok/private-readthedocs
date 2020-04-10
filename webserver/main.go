@@ -7,6 +7,7 @@ import (
 )
 
 //go:generate go run services/database/migrations/generate.go
+//go:generate python scripts/create_meta_variables.py
 
 func main() {
 	db, err := database.New(&database.DbOption{
