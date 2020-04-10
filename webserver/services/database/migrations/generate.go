@@ -61,7 +61,7 @@ func generateMigrationFiles() (string, error) {
 
 	log.Printf("generated %%d migration scripts", len(_migrations))
 
-	return fmt.Sprintf("file://%s", strings.Replace(folder, "\\", "/", -1)), nil
+	return fmt.Sprintf("file://%%s", strings.Replace(folder, "\\", "/", -1)), nil
 }
 `
 
