@@ -6,7 +6,7 @@ import (
 	"private-sphinx-docs/services/database"
 )
 
-//go:generate go run services/database/migrations/generate.go
+//go:generate python scripts/create_migration_file.py
 //go:generate python scripts/create_meta_variables.py
 
 func main() {

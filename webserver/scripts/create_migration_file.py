@@ -1,3 +1,9 @@
+from pathlib import Path
+from subprocess import run, DEVNULL
+
+folder = Path(__file__).parent.parent.joinpath('services', 'database')
+
+template = """
 // This file is auto-generated and should not be edited by hand
 package database
 
@@ -27,22 +33,7 @@ func generateMigrationFiles() (string, error) {
 	}
 
 	_migrations := map[string]string{
-		"01_accounts": `CREATE TABLE account
-(
-    id       SERIAL PRIMARY KEY,
-    username VARCHAR(255) UNIQUE CHECK ( length(username) >= 4 ) NOT NULL,
-    password VARCHAR(255) CHECK ( length(password) >= 4 )        NOT NULL,
-    is_admin BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE document
-(
-    id          SERIAL PRIMARY KEY,
-    name        VARCHAR(255) UNIQUE CHECK ( length(name) >= 1 ) NOT NULL,
-    last_update TIMESTAMP DEFAULT NOW(),
-    account_id  INT REFERENCES account (id) ON UPDATE CASCADE ON DELETE CASCADE
-);
-`,
+	    /*CONTENT*/
 	}
 
 	for title, content := range _migrations {
@@ -61,6 +52,36 @@ CREATE TABLE document
 	}
 
 	log.Printf("generated %d migration scripts", len(_migrations))
-
+	
 	return fmt.Sprintf("file://%s", strings.Replace(folder, `\`, "/", -1)), nil
 }
+""".strip()
+
+
+def read_migration_content():
+    contents = []
+    for script in folder.joinpath('migrations').glob('*.up.sql'):
+        name = script.name.split('.')[0]
+        with open(script.absolute().as_posix()) as f:
+            contents.append(f'"{name}": `{f.read()}`,')
+
+    return '\n'.join(contents)
+
+
+def write_migration_file():
+    content = template
+    for key, value in {
+        "/*CONTENT*/": read_migration_content(),
+    }.items():
+        content = content.replace(key, value)
+
+    file = Path(__file__).parent.parent.joinpath('services', 'database', 'migrations.go')
+    with open(file, 'w') as f:
+        f.write(content)
+
+    run(['go', 'fmt', file.absolute().as_posix()], stdout=DEVNULL)
+    print("Generated migration files")
+
+
+if __name__ == '__main__':
+    write_migration_file()
