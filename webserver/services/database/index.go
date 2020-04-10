@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"strings"
@@ -95,14 +96,25 @@ func (d *Database) MustBegin() Tx {
 // NamedExec a named query within a transaction. Any named placeholder parameters
 // are replaced with fields from arg.
 func (t *Tx) NamedExec(query string, arg interface{}) (int64, error) {
-	result, err := t.Tx.NamedExec(query, arg)
+	return rowsChanged(t.Tx.NamedExec(query, arg))
+}
+
+// Exec executes a query that doesn't return rows.
+// For example: an INSERT and UPDATE.
+func (t *Tx) Exec(query string, args ...interface{}) (int64, error) {
+	return rowsChanged(t.Tx.Exec(query, args...))
+}
+
+func rowsChanged(result sql.Result, err error) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	num, err := result.RowsAffected()
 	if err != nil {
 		return 0, err
 	}
+
 	return num, err
 }
 
