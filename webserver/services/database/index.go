@@ -92,9 +92,39 @@ func (d *Database) MustBegin() Tx {
 	return Tx{tx}
 }
 
-func (t *Tx) Rollback() {
-	err := t.Tx.Rollback()
+// NamedExec a named query within a transaction. Any named placeholder parameters
+// are replaced with fields from arg.
+func (t *Tx) NamedExec(query string, arg interface{}) (int64, error) {
+	result, err := t.Tx.NamedExec(query, arg)
 	if err != nil {
-		log.Printf("error rolling back transaction: %v", err)
+		return 0, err
 	}
+	num, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return num, err
+}
+
+func (t *Tx) Close(err error) {
+	if err != nil {
+		_ = t.Tx.Rollback()
+		log.Printf("error rolling back transaction: %v", err)
+	} else {
+		_ = t.Tx.Commit()
+	}
+}
+
+// Use this after inserting data into the database. The query should have a
+// "RETURNING id" at the end
+func mustGetId(rows *sqlx.Rows) int {
+	var id int
+	for rows.Next() {
+		err := rows.Scan(&id)
+		if err != nil {
+			panic(errors.Wrap(err, "could not get id from rows"))
+		}
+		return id
+	}
+	panic("could not get any id data")
 }
