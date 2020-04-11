@@ -57,6 +57,13 @@ func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 			}
 		}
 
+		if accounts, err := h.DB.FetchAccounts(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		} else if len(accounts) == 0 {
+			isAdmin = true // first account is always admin account
+		}
+
 		account, err := h.DB.CreateAccount(p.Username, p.Password, isAdmin)
 		if err != nil {
 			http.Error(w, err.Error(), 400)

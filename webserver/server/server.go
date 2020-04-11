@@ -14,6 +14,7 @@ import (
 
 type IStore interface {
 	FetchAccount(username string) (*db.Account, error)
+	FetchAccounts() ([]*db.Account, error)
 	CreateAccount(username, password string, isAdmin bool) (*db.Account, error)
 	UpdateAccount(id int, username, password string, isAdmin bool) (*db.Account, error)
 	DeleteAccount(username string) error
