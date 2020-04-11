@@ -1,10 +1,8 @@
 from pathlib import Path
-from subprocess import run, DEVNULL
 
 folder = Path(__file__).parent.parent.joinpath('services', 'database')
 
-template = """
-// This file is auto-generated and should not be edited by hand
+template = """// This file is auto-generated and should not be edited by hand
 package database
 
 import (
@@ -33,7 +31,7 @@ func generateMigrationFiles() (string, error) {
 	}
 
 	_migrations := map[string]string{
-	    /*CONTENT*/
+		/*CONTENT*/
 	}
 
 	for title, content := range _migrations {
@@ -52,10 +50,10 @@ func generateMigrationFiles() (string, error) {
 	}
 
 	log.Printf("generated %d migration scripts", len(_migrations))
-	
+
 	return fmt.Sprintf("file://%s", strings.Replace(folder, `\`, "/", -1)), nil
 }
-""".strip()
+"""
 
 
 def read_migration_content():
@@ -76,11 +74,15 @@ def write_migration_file():
         content = content.replace(key, value)
 
     file = Path(__file__).parent.parent.joinpath('services', 'database', 'migrations.go')
-    with open(file, 'w') as f:
-        f.write(content)
+    with open(file, 'r') as f:
+        original = f.read()
 
-    run(['go', 'fmt', file.absolute().as_posix()], stdout=DEVNULL)
-    print("Generated migration files")
+    if original != content:
+        with open(file, 'w') as f:
+            f.write(content)
+        print("Generated migration files")
+    else:
+        print("Similar contents in constants file. Generation skipped")
 
 
 if __name__ == '__main__':
