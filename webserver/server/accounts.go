@@ -4,25 +4,25 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 
 	db "private-sphinx-docs/services/database"
 )
 
-type IAccountStore interface {
-	FetchAccount(username string) (*db.Account, error)
-	CreateAccount(account *db.Account) (*db.Account, error)
-	UpdateAccount(account *db.Account) (*db.Account, error)
-	DeleteAccount(username string) error
-}
-
 type AccountHandler struct {
-	DB IAccountStore
+	DB IStore
+	FS IFileHandler
 }
 
 type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type CreateAccountPayload struct {
+	Requester *Credentials `json:"requester"`
+	*db.Account
 }
 
 type UpdateAccountPayload struct {
@@ -41,14 +41,23 @@ type DeleteAccountPayload struct {
 
 func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var account *db.Account
-		err := readJson(r, &account)
+		var p *CreateAccountPayload
+		err := readJson(r, &p)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		account, err = h.DB.CreateAccount(account)
+		isAdmin := false
+		if p.Requester != nil {
+			req, err := h.fetchAccount(p.Requester.Username, p.Requester.Password)
+			if err == nil && req.IsAdmin {
+				// only allow isAdmin to potentially be true if requester is admin
+				isAdmin = p.IsAdmin
+			}
+		}
+
+		account, err := h.DB.CreateAccount(p.Username, p.Password, isAdmin)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -67,20 +76,20 @@ func (h *AccountHandler) UpdateAccount() http.HandlerFunc {
 			return
 		}
 
-		account, isAdmin, err := h.IsAuthorizedToTransformSubject(p.Requester, p.Details.Credentials)
+		acc, reqIsAdmin, err := h.isAuthorizedToTransformSubject(p.Requester, p.Details.Credentials)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
 		if username := strings.TrimSpace(p.Details.NewUsername); username != "" {
-			account.Username = username
+			acc.Username = username
 		}
-		if isAdmin {
-			account.IsAdmin = p.Details.IsAdmin
+		if reqIsAdmin {
+			acc.IsAdmin = p.Details.IsAdmin
 		}
 
-		account, err = h.DB.UpdateAccount(account)
+		account, err := h.DB.UpdateAccount(acc.Id, acc.Username, acc.Password, acc.IsAdmin)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -91,6 +100,19 @@ func (h *AccountHandler) UpdateAccount() http.HandlerFunc {
 }
 
 func (h *AccountHandler) DeleteAccount() http.HandlerFunc {
+	removeProjectFiles := func(account *db.Account) error {
+		docs, err := account.FetchProjects()
+		if err != nil {
+			return errors.Wrap(err, "could not get account's projects")
+		}
+		for _, d := range docs {
+			if e := h.FS.Remove(d.Title); e != nil {
+				err = multierror.Append(err, errors.Wrapf(err, "could not remove project '%s;", d.Title))
+			}
+		}
+		return err
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		var p *DeleteAccountPayload
 		err := readJson(r, &p)
@@ -99,20 +121,19 @@ func (h *AccountHandler) DeleteAccount() http.HandlerFunc {
 			return
 		}
 
-		account, _, err := h.IsAuthorizedToTransformSubject(p.Requester, p.Details)
+		account, _, err := h.isAuthorizedToTransformSubject(p.Requester, p.Details)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		// TODO remove physical documents
-		_, err = account.FetchDocuments()
+		err = h.DB.DeleteAccount(account.Username)
 		if err != nil {
-			http.Error(w, errors.Wrap(err, "could not get account's documents").Error(), 400)
+			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		err = h.DB.DeleteAccount(account.Username)
+		err = removeProjectFiles(account)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -131,12 +152,9 @@ func (h *AccountHandler) ValidateAccount() http.HandlerFunc {
 			return
 		}
 
-		acc, err := h.DB.FetchAccount(p.Username)
+		_, err = h.fetchAccount(p.Username, p.Password)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
-			return
-		} else if !acc.HasValidPassword(p.Password) {
-			http.Error(w, "invalid credentials", 400)
 			return
 		}
 
@@ -144,11 +162,23 @@ func (h *AccountHandler) ValidateAccount() http.HandlerFunc {
 	}
 }
 
-func (h *AccountHandler) IsAuthorizedToTransformSubject(requester *Credentials, subject *Credentials) (*db.Account, bool, error) {
-	req, err := h.DB.FetchAccount(requester.Username)
+func (h *AccountHandler) fetchAccount(username, password string) (*db.Account, error) {
+	acc, err := h.DB.FetchAccount(username)
+	if err != nil {
+		return nil, err
+	}
+	if !acc.HasValidPassword(password) {
+		return nil, errors.New("invalid credentials")
+	}
+
+	return acc, nil
+}
+
+func (h *AccountHandler) isAuthorizedToTransformSubject(requester *Credentials, subject *Credentials) (*db.Account, bool, error) {
+	req, err := h.fetchAccount(requester.Username, requester.Password)
 	if err != nil {
 		return nil, false, err
-	} else if !req.HasValidPassword(requester.Password) || (!req.IsAdmin && subject.Username != req.Username) {
+	} else if !req.IsAdmin && subject.Username != req.Username {
 		return nil, false, errors.New("Unauthorized to make changes")
 	}
 
