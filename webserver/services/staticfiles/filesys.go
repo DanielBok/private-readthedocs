@@ -3,10 +3,12 @@ package staticfiles
 import (
 	"archive/zip"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/otiai10/copy"
 	"github.com/pkg/errors"
 
 	"private-sphinx-docs/libs"
@@ -41,6 +43,10 @@ func (f *FileSys) Upload(r io.ReaderAt, name string, size int64) error {
 		return errors.Wrap(err, "could not read zip contents")
 	}
 	dest := f.Destination(name)
+	err = os.RemoveAll(dest)
+	if err != nil {
+		return errors.Wrap(err, "could not remove old directory")
+	}
 
 	extractAndWriteFile := func(f *zip.File) error {
 		rc, err := f.Open()
@@ -78,12 +84,12 @@ func (f *FileSys) Upload(r io.ReaderAt, name string, size int64) error {
 	}
 
 	for _, file := range contents.File {
-
 		if err := extractAndWriteFile(file); err != nil {
 			return err
 		}
 	}
-	return nil
+
+	return formatContentDirectory(dest)
 }
 
 func (f *FileSys) Destination(name string) string {
@@ -93,4 +99,35 @@ func (f *FileSys) Destination(name string) string {
 
 func (f *FileSys) Remove(name string) error {
 	return os.RemoveAll(f.Destination(name))
+}
+
+// If the destination folder only contains 1 folder, moves the entire folder up 1
+// level till we reach the first level with more than 1 item.
+func formatContentDirectory(src string) error {
+	root := src
+	for {
+		f, err := ioutil.ReadDir(src)
+		if err != nil {
+			return err
+		}
+
+		if len(f) != 1 {
+			break
+		}
+
+		src = filepath.Join(src, filepath.Join(f[0].Name()))
+	}
+
+	if src != root {
+		err := copy.Copy(src, root)
+		if err != nil {
+			return err
+		}
+		err = os.RemoveAll(src)
+		if err != nil {
+			return errors.Wrap(err, "could not remove old directory")
+		}
+	}
+
+	return nil
 }
