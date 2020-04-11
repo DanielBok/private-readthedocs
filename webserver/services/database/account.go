@@ -77,6 +77,20 @@ func (d *Database) FetchAccount(username string) (*Account, error) {
 	return acc, nil
 }
 
+func (d *Database) FetchAccounts() ([]*Account, error) {
+	var err error
+	tx := d.MustBegin()
+	defer tx.Close(err)
+
+	var accounts []*Account
+	err = tx.Select(&accounts, "SELECT * FROM account")
+	if err != nil {
+		return nil, err
+	}
+
+	return accounts, nil
+}
+
 func (d *Database) CreateAccount(username, password string, isAdmin bool) (*Account, error) {
 	account := &Account{
 		Username: username,

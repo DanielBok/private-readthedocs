@@ -121,6 +121,23 @@ func TestDatabase_FetchAccount(t *testing.T) {
 	})
 }
 
+func TestDatabase_FetchAccounts(t *testing.T) {
+	t.Parallel()
+	assert := require.New(t)
+
+	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
+		db, err := newTestDb(info, seedAccounts)
+		assert.NoError(err)
+		defer closeDb(db)
+
+		accounts, err := db.FetchAccounts()
+		assert.NoError(err)
+
+		mocks, _ := mockAccounts()
+		assert.Len(accounts, len(mocks))
+	})
+}
+
 func TestDatabase_UpdateAccount(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
