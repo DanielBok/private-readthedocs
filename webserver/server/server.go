@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/pkg/errors"
 
 	db "private-sphinx-docs/services/database"
 )
@@ -32,6 +33,7 @@ type IFileHandler interface {
 	Destination(name string) string
 	// Remove the project files
 	Remove(name string) error
+	Source() string
 }
 
 type Option struct {
@@ -86,6 +88,9 @@ func attachHandlers(r *chi.Mux, option Option) {
 		})
 	})
 
+	handler := DocumentationHandler{option.FileHandler.Source()}
+	handler.MustInit()
+	r.Get("/*", handler.FileServer())
 }
 
 func StatusCheck(version string) http.HandlerFunc {

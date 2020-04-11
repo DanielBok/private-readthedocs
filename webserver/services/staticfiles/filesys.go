@@ -101,6 +101,10 @@ func (f *FileSys) Remove(name string) error {
 	return os.RemoveAll(f.Destination(name))
 }
 
+func (f *FileSys) Source() string {
+	return f.root
+}
+
 // If the destination folder only contains 1 folder, moves the entire folder up 1
 // level till we reach the first level with more than 1 item.
 func formatContentDirectory(src string) error {
