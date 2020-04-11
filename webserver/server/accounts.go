@@ -117,12 +117,9 @@ func (h *AccountHandler) UpdateAccount() http.HandlerFunc {
 }
 
 func (h *AccountHandler) DeleteAccount() http.HandlerFunc {
-	removeProjectFiles := func(account *db.Account) error {
-		docs, err := account.FetchProjects()
-		if err != nil {
-			return errors.Wrap(err, "could not get account's projects")
-		}
-		for _, d := range docs {
+	removeProjectFiles := func(projects []*db.Project) error {
+		var err error
+		for _, d := range projects {
 			if e := h.FS.Remove(d.Title); e != nil {
 				err = multierror.Append(err, errors.Wrapf(err, "could not remove project '%s;", d.Title))
 			}
@@ -149,7 +146,7 @@ func (h *AccountHandler) DeleteAccount() http.HandlerFunc {
 			return
 		}
 
-		err = removeProjectFiles(account)
+		err = removeProjectFiles(account.Projects)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return

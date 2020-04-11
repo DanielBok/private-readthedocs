@@ -21,6 +21,7 @@ type IStore interface {
 	DeleteAccount(username string) (*db.Account, error)
 
 	FetchProjects() ([]*db.Project, error)
+	FetchProjectsByAccount(accountId int) ([]*db.Project, error)
 	CreateOrUpdateProject(accountId int, title string) (*db.Project, error)
 	DeleteProject(title string) error
 	CanOwnProject(accountId int, title string) (bool, error)

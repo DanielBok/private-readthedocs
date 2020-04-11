@@ -38,7 +38,7 @@ func (h *ProjectHandler) FetchProjects() http.HandlerFunc {
 				return
 			}
 
-			projects, err := acc.FetchProjects()
+			projects, err := h.DB.FetchProjectsByAccount(acc.Id)
 			if err != nil {
 				http.Error(w, err.Error(), 400)
 				return
