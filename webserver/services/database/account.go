@@ -52,16 +52,6 @@ func (u *Account) FetchProjects() ([]*Project, error) {
 	return projects, nil
 }
 
-func (u *Account) FetchProject(name string) (*Project, error) {
-	proj, err := u.db.FetchProject(name)
-	if err != nil {
-		return nil, err
-	} else if proj.AccountId != u.Id {
-		return nil, errors.Errorf("user does not own project: '%s'", name)
-	}
-	return proj, nil
-}
-
 func (d *Database) FetchAccount(username string) (*Account, error) {
 	var err error
 	tx := d.MustBegin()
