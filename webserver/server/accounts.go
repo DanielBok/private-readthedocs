@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 
@@ -20,28 +21,15 @@ type Credentials struct {
 	Password string `json:"password"`
 }
 
-type CreateAccountPayload struct {
-	Requester *Credentials `json:"requester"`
-	*db.Account
-}
-
 type UpdateAccountPayload struct {
-	Requester *Credentials `json:"requester"`
-	Details   *struct {
-		*Credentials
-		NewUsername string `json:"new_username"`
-		IsAdmin     bool   `json:"isAdmin"`
-	} `json:"details"`
-}
-
-type DeleteAccountPayload struct {
-	Requester *Credentials `json:"requester"`
-	Details   *Credentials `json:"details"`
+	*Credentials
+	OldUsername string `json:"oldUsername"`
+	IsAdmin     bool   `json:"isAdmin"`
 }
 
 func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var p *CreateAccountPayload
+		var p *db.Account
 		err := readJson(r, &p)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
@@ -49,12 +37,12 @@ func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 		}
 
 		isAdmin := false
-		if p.Requester != nil {
-			req, err := h.fetchAccount(p.Requester.Username, p.Requester.Password)
-			if err == nil && req.IsAdmin {
-				// only allow isAdmin to potentially be true if requester is admin
-				isAdmin = p.IsAdmin
-			}
+		// get requester, if there's an error, it just means that requester is not
+		// admin user
+		req, err := authenticate(h.DB, r)
+		if err == nil && req != nil && req.IsAdmin {
+			// only allow isAdmin to potentially be true if requester is admin
+			isAdmin = p.IsAdmin
 		}
 
 		if accounts, err := h.DB.FetchAccounts(); err != nil {
@@ -77,6 +65,26 @@ func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 }
 
 func (h *AccountHandler) UpdateAccount() http.HandlerFunc {
+	formAccount := func(req *db.Account, p *UpdateAccountPayload) (*db.Account, error) {
+		account, err := h.DB.FetchAccount(p.OldUsername)
+		if err != nil {
+			return nil, err
+		}
+
+		if !(req.IsAdmin || req.Username == account.Username) {
+			return nil, errors.New("Unauthorized to make changes")
+		}
+
+		account.Username = strings.TrimSpace(p.Username)
+		account.Password = strings.TrimSpace(p.Password)
+
+		if req.IsAdmin {
+			account.IsAdmin = p.IsAdmin
+		}
+
+		return account, nil
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		var p *UpdateAccountPayload
 		err := readJson(r, &p)
@@ -85,20 +93,19 @@ func (h *AccountHandler) UpdateAccount() http.HandlerFunc {
 			return
 		}
 
-		acc, reqIsAdmin, err := h.isAuthorizedToTransformSubject(p.Requester, p.Details.Credentials)
+		req, err := authenticate(h.DB, r)
+		if err != nil {
+			http.Error(w, errors.Wrap(err, "invalid requester").Error(), 400)
+			return
+		}
+
+		acc, err := formAccount(req, p)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		if username := strings.TrimSpace(p.Details.NewUsername); username != "" {
-			acc.Username = username
-		}
-		if reqIsAdmin {
-			acc.IsAdmin = p.Details.IsAdmin
-		}
-
-		account, err := h.DB.UpdateAccount(acc.Id, acc.Username, acc.Password, acc.IsAdmin)
+		account, err := h.DB.UpdateAccount(acc)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -124,20 +131,19 @@ func (h *AccountHandler) DeleteAccount() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		var p *DeleteAccountPayload
-		err := readJson(r, &p)
+		req, err := authenticate(h.DB, r)
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			http.Error(w, errors.Wrap(err, "invalid requester").Error(), 400)
 			return
 		}
 
-		account, _, err := h.isAuthorizedToTransformSubject(p.Requester, p.Details)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
+		username := chi.URLParam(r, "username")
+		if !(req.IsAdmin || req.Username == username) {
+			http.Error(w, "invalid credentials to remove account", 400)
 			return
 		}
 
-		err = h.DB.DeleteAccount(account.Username)
+		account, err := h.DB.DeleteAccount(username)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -162,39 +168,16 @@ func (h *AccountHandler) ValidateAccount() http.HandlerFunc {
 			return
 		}
 
-		_, err = h.fetchAccount(p.Username, p.Password)
+		acc, err := h.DB.FetchAccount(p.Username)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
+			return
+		}
+		if !acc.HasValidPassword(p.Password) {
+			http.Error(w, "invalid credentials", 400)
 			return
 		}
 
 		ok(w)
 	}
-}
-
-func (h *AccountHandler) fetchAccount(username, password string) (*db.Account, error) {
-	acc, err := h.DB.FetchAccount(username)
-	if err != nil {
-		return nil, err
-	}
-	if !acc.HasValidPassword(password) {
-		return nil, errors.New("invalid credentials")
-	}
-
-	return acc, nil
-}
-
-func (h *AccountHandler) isAuthorizedToTransformSubject(requester *Credentials, subject *Credentials) (*db.Account, bool, error) {
-	req, err := h.fetchAccount(requester.Username, requester.Password)
-	if err != nil {
-		return nil, false, err
-	} else if !req.IsAdmin && subject.Username != req.Username {
-		return nil, false, errors.New("Unauthorized to make changes")
-	}
-
-	account, err := h.DB.FetchAccount(subject.Username)
-	if err != nil {
-		return nil, false, err
-	}
-	return account, req.IsAdmin, nil
 }

@@ -157,7 +157,12 @@ func TestDatabase_UpdateAccount(t *testing.T) {
 			{10, "Username", true},
 			{0, "Username", true},
 		} {
-			res, err := db.UpdateAccount(r.Id, r.Username, "Password", false)
+			res, err := db.UpdateAccount(&Account{
+				Id:       r.Id,
+				Username: r.Username,
+				Password: "Password",
+				IsAdmin:  false,
+			})
 			if r.HasError {
 				assert.Error(err)
 			} else {
@@ -184,11 +189,12 @@ func TestDatabase_DeleteAccount(t *testing.T) {
 			{admin, false},
 			{"UserDoesNotExist", true},
 		} {
-			err := db.DeleteAccount(r.Username)
+			acc, err := db.DeleteAccount(r.Username)
 			if r.HasError {
 				assert.Error(err)
 			} else {
 				assert.NoError(err)
+				assert.IsType(&Account{}, acc)
 			}
 		}
 	})

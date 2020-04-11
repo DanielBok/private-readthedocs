@@ -124,22 +124,17 @@ RETURNING id
 	return account, nil
 }
 
-func (d *Database) UpdateAccount(id int, username, password string, isAdmin bool) (*Account, error) {
-	if id <= 0 {
+func (d *Database) UpdateAccount(account *Account) (*Account, error) {
+	if account.Id <= 0 {
 		return nil, errors.New("account id not given")
 	}
-	account := &Account{
-		Id:       id,
-		Username: username,
-		Password: password,
-		IsAdmin:  isAdmin,
-		db:       d,
-	}
+
 	err := account.Validate()
 	if err != nil {
 		return nil, err
 	}
 
+	account.db = d
 	err = account.SaltPassword()
 	if err != nil {
 		return nil, err
@@ -164,17 +159,21 @@ WHERE id = :id;
 	return account, nil
 }
 
-func (d *Database) DeleteAccount(username string) error {
-	var err error
+func (d *Database) DeleteAccount(username string) (*Account, error) {
+	acc, err := d.FetchAccount(username)
+	if err != nil {
+		return nil, err
+	}
+
 	tx := d.MustBegin()
 	defer tx.Close(err)
 
 	n, err := tx.Exec("DELETE FROM account WHERE username = $1", username)
 	if err != nil {
-		return err
+		return nil, err
 	} else if n == 0 {
-		return errors.Errorf("no account with username: '%s'", username)
+		return nil, errors.Errorf("no account with username: '%s'", username)
 	}
 
-	return nil
+	return acc, nil
 }

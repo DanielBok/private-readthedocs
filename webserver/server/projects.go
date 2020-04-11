@@ -16,8 +16,7 @@ type ProjectHandler struct {
 }
 
 type DeleteProjectPayload struct {
-	Requester *Credentials `json:"requester"`
-	Title     string       `json:"title"`
+	Title string `json:"title"`
 }
 
 func (h *ProjectHandler) FetchProjects() http.HandlerFunc {
@@ -51,23 +50,20 @@ func (h *ProjectHandler) FetchProjects() http.HandlerFunc {
 
 func (h *ProjectHandler) UploadProject() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := r.ParseMultipartForm(10 << 20)
+		acc, err := authenticate(h.DB, r)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		username := r.PostFormValue("username")
-		password := r.PostFormValue("password")
+		err = r.ParseMultipartForm(10 << 20)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
 		title := r.PostFormValue("title")
-
-		acc, err := h.hasValidAccount(username, password)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-
-		err = h.ownsProject(acc.Id, title)
+		err = h.canManageProject(acc, title)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -88,7 +84,7 @@ func (h *ProjectHandler) UploadProject() http.HandlerFunc {
 		}
 		defer func() { _ = file.Close() }()
 
-		err = h.FS.Upload(file, header.Filename, header.Size)
+		err = h.FS.Upload(file, title, header.Size)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -100,20 +96,20 @@ func (h *ProjectHandler) UploadProject() http.HandlerFunc {
 
 func (h *ProjectHandler) DeleteProject() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		acc, err := authenticate(h.DB, r)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
 		var p *DeleteProjectPayload
-		err := readJson(r, &p)
+		err = readJson(r, &p)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		acc, err := h.hasValidAccount(p.Requester.Username, p.Requester.Password)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-
-		err = h.ownsProject(acc.Id, p.Title)
+		err = h.canManageProject(acc, p.Title)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -135,23 +131,14 @@ func (h *ProjectHandler) DeleteProject() http.HandlerFunc {
 	}
 }
 
-func (h *ProjectHandler) hasValidAccount(username, password string) (*db.Account, error) {
-	acc, err := h.DB.FetchAccount(username)
-	if err != nil {
-		return nil, err
-	}
-
-	if !acc.HasValidPassword(password) {
-		return nil, errors.New("invalid credentials")
-	}
-
-	return acc, nil
-}
-
 // check if the user can create, update or delete project
-func (h *ProjectHandler) ownsProject(id int, title string) error {
+func (h *ProjectHandler) canManageProject(account *db.Account, title string) error {
+	if account.IsAdmin {
+		return nil
+	}
+
 	// check if the user can create or update project
-	canOwn, err := h.DB.CanOwnProject(id, title)
+	canOwn, err := h.DB.CanOwnProject(account.Id, title)
 	if err != nil {
 		return err
 	} else if !canOwn {

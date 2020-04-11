@@ -17,8 +17,8 @@ type IStore interface {
 	FetchAccount(username string) (*db.Account, error)
 	FetchAccounts() ([]*db.Account, error)
 	CreateAccount(username, password string, isAdmin bool) (*db.Account, error)
-	UpdateAccount(id int, username, password string, isAdmin bool) (*db.Account, error)
-	DeleteAccount(username string) error
+	UpdateAccount(account *db.Account) (*db.Account, error)
+	DeleteAccount(username string) (*db.Account, error)
 
 	FetchProjects() ([]*db.Project, error)
 	CreateOrUpdateProject(accountId int, title string) (*db.Project, error)
@@ -76,7 +76,7 @@ func attachHandlers(r *chi.Mux, option Option) {
 			r.Get("/validate", handler.ValidateAccount())
 			r.Post("/", handler.CreateAccount())
 			r.Put("/", handler.UpdateAccount())
-			r.Delete("/", handler.DeleteAccount())
+			r.Delete("/{username}", handler.DeleteAccount())
 		})
 
 		r.Route("/project", func(r chi.Router) {
@@ -122,4 +122,21 @@ func ok(w http.ResponseWriter) {
 	if _, err := fmt.Fprint(w, "Okay"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func authenticate(store IStore, r *http.Request) (*db.Account, error) {
+	username, password, ok := r.BasicAuth()
+	if !ok {
+		return nil, errors.New("authorization not set in request")
+	}
+
+	account, err := store.FetchAccount(username)
+	if err != nil {
+		return nil, errors.Wrap(err, "server error: could not fetch account")
+	}
+	if !account.HasValidPassword(password) {
+		return nil, errors.New("invalid credentials")
+	}
+
+	return account, nil
 }
