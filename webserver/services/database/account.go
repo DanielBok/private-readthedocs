@@ -11,7 +11,6 @@ type Account struct {
 	Password string     `json:"password,omitempty"`
 	IsAdmin  bool       `json:"isAdmin" db:"is_admin"`
 	Projects []*Project `json:"projects"`
-	db       *Database  `json:"-" db:"-"`
 }
 
 func NewAccount(username, password string, isAdmin bool) (*Account, error) {
@@ -53,15 +52,6 @@ func (u *Account) SaltPassword() error {
 	return nil
 }
 
-func (u *Account) FetchProjects() ([]*Project, error) {
-	projects, err := u.db.FetchUserProjects(u.Id)
-	if err != nil {
-		return nil, errors.Wrapf(err, "could not fetch projects from %s", u.Username)
-	}
-	u.Projects = projects
-	return projects, nil
-}
-
 func (d *Database) FetchAccount(username string) (*Account, error) {
 	var err error
 	tx := d.MustBegin()
@@ -72,7 +62,6 @@ func (d *Database) FetchAccount(username string) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	acc.db = d
 
 	return acc, nil
 }
@@ -96,7 +85,6 @@ func (d *Database) CreateAccount(username, password string, isAdmin bool) (*Acco
 		Username: username,
 		Password: password,
 		IsAdmin:  isAdmin,
-		db:       d,
 	}
 	err := account.Validate()
 	if err != nil {
@@ -134,7 +122,6 @@ func (d *Database) UpdateAccount(account *Account) (*Account, error) {
 		return nil, err
 	}
 
-	account.db = d
 	err = account.SaltPassword()
 	if err != nil {
 		return nil, err
@@ -161,6 +148,11 @@ WHERE id = :id;
 
 func (d *Database) DeleteAccount(username string) (*Account, error) {
 	acc, err := d.FetchAccount(username)
+	if err != nil {
+		return nil, err
+	}
+
+	acc.Projects, err = d.FetchProjectsByAccount(acc.Id)
 	if err != nil {
 		return nil, err
 	}

@@ -65,7 +65,7 @@ func (d *Database) FetchProjects() ([]*Project, error) {
 	return projects, nil
 }
 
-func (d *Database) FetchUserProjects(accountId int) ([]*Project, error) {
+func (d *Database) FetchProjectsByAccount(accountId int) ([]*Project, error) {
 	var err error
 	tx := d.MustBegin()
 	defer tx.Close(err)
