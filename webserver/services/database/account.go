@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Account struct {
@@ -40,7 +41,16 @@ func (u *Account) Validate() error {
 }
 
 func (u *Account) HasValidPassword(password string) bool {
-	return u.Password == password
+	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) == nil
+}
+
+func (u *Account) SaltPassword() error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.Wrap(err, "could not hash password")
+	}
+	u.Password = string(hash)
+	return nil
 }
 
 func (u *Account) FetchProjects() ([]*Project, error) {
@@ -67,8 +77,19 @@ func (d *Database) FetchAccount(username string) (*Account, error) {
 	return acc, nil
 }
 
-func (d *Database) CreateAccount(account *Account) (*Account, error) {
+func (d *Database) CreateAccount(username, password string, isAdmin bool) (*Account, error) {
+	account := &Account{
+		Username: username,
+		Password: password,
+		IsAdmin:  isAdmin,
+		db:       d,
+	}
 	err := account.Validate()
+	if err != nil {
+		return nil, err
+	}
+
+	err = account.SaltPassword()
 	if err != nil {
 		return nil, err
 	}
@@ -85,19 +106,31 @@ RETURNING id
 		return nil, err
 	}
 	account.Id = mustGetId(rows)
-	account.db = d
 
 	return account, nil
 }
 
-func (d *Database) UpdateAccount(account *Account) (*Account, error) {
+func (d *Database) UpdateAccount(id int, username, password string, isAdmin bool) (*Account, error) {
+	if id <= 0 {
+		return nil, errors.New("account id not given")
+	}
+	account := &Account{
+		Id:       id,
+		Username: username,
+		Password: password,
+		IsAdmin:  isAdmin,
+		db:       d,
+	}
 	err := account.Validate()
 	if err != nil {
 		return nil, err
 	}
-	if account.Id <= 0 {
-		return nil, errors.New("account id not given")
+
+	err = account.SaltPassword()
+	if err != nil {
+		return nil, err
 	}
+
 	tx := d.MustBegin()
 	defer tx.Close(err)
 
@@ -114,7 +147,6 @@ WHERE id = :id;
 		return nil, errors.Errorf("no account with id: %d", account.Id)
 	}
 
-	account.db = d
 	return account, nil
 }
 

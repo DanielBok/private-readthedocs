@@ -34,6 +34,32 @@ func TestNewAccount(t *testing.T) {
 	}
 }
 
+func TestAccount_HasValidPassword(t *testing.T) {
+	t.Parallel()
+	assert := require.New(t)
+
+	acc := &Account{
+		Username: "Username",
+		Password: "Password",
+		IsAdmin:  false,
+		Projects: nil,
+	}
+
+	err := acc.SaltPassword()
+	assert.NoError(err)
+
+	for _, r := range []struct {
+		Password string
+		Expected bool
+	}{
+		{"Password", true},
+		{"Wrong", false},
+	} {
+		actual := acc.HasValidPassword(r.Password)
+		assert.Equal(r.Expected, actual)
+	}
+}
+
 func TestDatabase_CreateAccount(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
@@ -46,7 +72,7 @@ func TestDatabase_CreateAccount(t *testing.T) {
 		assert.NoError(err)
 
 		for _, acc := range accounts {
-			acc, err := db.CreateAccount(acc)
+			acc, err := db.CreateAccount(acc.Username, acc.Password, acc.IsAdmin)
 			assert.NoError(err)
 			assert.IsType(&Account{}, acc)
 		}
@@ -55,14 +81,11 @@ func TestDatabase_CreateAccount(t *testing.T) {
 		newAccounts, err := mockAccounts()
 		assert.NoError(err)
 		acc := newAccounts[0]
-		_, err = db.CreateAccount(acc)
+		_, err = db.CreateAccount(acc.Username, acc.Password, acc.IsAdmin)
 		assert.Error(err, "username already exists")
 
 		// test that validation raises errors
-		_, err = db.CreateAccount(&Account{
-			Username: "SomeName",
-			Password: "",
-		})
+		_, err = db.CreateAccount("SomeName", "", true)
 		assert.Error(err, "password too short, validation should have caught it")
 	})
 }
@@ -111,18 +134,12 @@ func TestDatabase_UpdateAccount(t *testing.T) {
 			{10, "Username", true},
 			{0, "Username", true},
 		} {
-			acc := &Account{
-				Id:       r.Id,
-				Username: r.Username,
-				Password: "Password",
-				IsAdmin:  false,
-			}
-			res, err := db.UpdateAccount(acc)
+			res, err := db.UpdateAccount(r.Id, r.Username, "Password", false)
 			if r.HasError {
 				assert.Error(err)
 			} else {
 				assert.NoError(err)
-				assert.EqualValues(acc, res)
+				assert.IsType(&Account{}, res)
 			}
 		}
 	})
@@ -182,7 +199,7 @@ func seedAccounts(db *Database) error {
 	}
 
 	for _, acc := range accounts {
-		_, err := db.CreateAccount(acc)
+		_, err := db.CreateAccount(acc.Username, acc.Password, acc.IsAdmin)
 		if err != nil {
 			return err
 		}
