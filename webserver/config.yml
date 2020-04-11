@@ -1,0 +1,18 @@
+app:
+  port: 2000
+  tls:
+    cert_file:
+    key_file:
+
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: password
+  db_name: postgres
+  ssl_mode: disable
+
+static_file:
+  type: filesys
+  source: C://temp/psd
+
