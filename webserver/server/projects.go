@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/pkg/errors"
@@ -21,21 +22,30 @@ type DeleteProjectPayload struct {
 
 func (h *ProjectHandler) FetchProjects() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username := chi.URLParam(r, "username")
+		username := strings.TrimSpace(chi.URLParam(r, "username"))
 
-		acc, err := h.DB.FetchAccount(username)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
+		if username == "" {
+			projects, err := h.DB.FetchProjects()
+			if err != nil {
+				http.Error(w, err.Error(), 400)
+				return
+			}
+
+			toJson(w, projects)
+		} else {
+			acc, err := h.DB.FetchAccount(username)
+			if err != nil {
+				http.Error(w, err.Error(), 400)
+				return
+			}
+
+			projects, err := acc.FetchProjects()
+			if err != nil {
+				http.Error(w, err.Error(), 400)
+				return
+			}
+			toJson(w, projects)
 		}
-
-		docs, err := acc.FetchProjects()
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-
-		toJson(w, docs)
 	}
 }
 

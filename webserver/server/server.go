@@ -19,6 +19,7 @@ type IStore interface {
 	UpdateAccount(id int, username, password string, isAdmin bool) (*db.Account, error)
 	DeleteAccount(username string) error
 
+	FetchProjects() ([]*db.Project, error)
 	CreateOrUpdateProject(accountId int, title string) (*db.Project, error)
 	DeleteProject(title string) error
 	CanOwnProject(accountId int, title string) (bool, error)
@@ -78,7 +79,8 @@ func attachHandlers(r *chi.Mux, option Option) {
 
 		r.Route("/project", func(r chi.Router) {
 			handler := ProjectHandler{DB: store, FS: fs}
-			r.Get("/{username}", handler.FetchProjects()) // get all user docs
+			r.Get("/", handler.FetchProjects())           // get all projects
+			r.Get("/{username}", handler.FetchProjects()) // get all user projects
 			r.Post("/", handler.UploadProject())          // upload new project (create / update)
 			r.Delete("/", handler.DeleteProject())        // removes project
 		})
