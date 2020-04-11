@@ -3,6 +3,7 @@ package database_test
 import (
 	"context"
 	"database/sql"
+	"log"
 	"strconv"
 	"time"
 
@@ -83,4 +84,11 @@ func newTestDb(c dktest.ContainerInfo, seedFns ...func(d *Database) error) (*Dat
 	}
 
 	return store, nil
+}
+
+func closeDb(db *Database) {
+	err := db.Close()
+	if err != nil {
+		log.Print(err)
+	}
 }

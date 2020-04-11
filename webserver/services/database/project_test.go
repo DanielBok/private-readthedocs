@@ -44,21 +44,23 @@ func TestDatabase_CreateProject(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts)
 		assert.NoError(err)
+		defer closeDb(db)
+
 		acc, err := db.FetchAccount(admin)
 		assert.NoError(err)
 
 		for _, p := range projects {
 			p.AccountId = acc.Id
-			proj, err := db.CreateProjects(p)
+			proj, err := db.CreateProject(p)
 			assert.NoError(err)
 			assert.IsType(&Project{}, proj)
 		}
 
-		_, err = db.CreateProjects(projects[0])
+		_, err = db.CreateProject(projects[0])
 		assert.Error(err, "project already exists")
 
 		// test that validation raises errors
-		_, err = db.CreateProjects(&Project{
+		_, err = db.CreateProject(&Project{
 			Title:     "",
 			AccountId: acc.Id,
 		})
@@ -73,6 +75,7 @@ func TestDatabase_FetchProject(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		for _, r := range []struct {
 			Title    string
@@ -99,6 +102,7 @@ func TestDatabase_FetchProjects(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		acc, err := db.FetchAccount(admin)
 		assert.NoError(err)
@@ -116,6 +120,7 @@ func TestDatabase_UpdateProject(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		proj, err := db.FetchProject(project1)
 		assert.NoError(err)
@@ -129,6 +134,56 @@ func TestDatabase_UpdateProject(t *testing.T) {
 	})
 }
 
+func TestDatabase_CreateOrUpdateProject(t *testing.T) {
+	t.Parallel()
+	assert := require.New(t)
+
+	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
+		db, err := newTestDb(info, seedAccounts, seedProjects)
+		assert.NoError(err)
+		defer closeDb(db)
+
+		acc, err := db.FetchAccount(admin)
+		assert.NoError(err)
+
+		for _, r := range []struct {
+			AccountId int
+			Title     string
+			HasError  bool
+		}{
+			{acc.Id, "NewProject", false}, // create
+			{acc.Id, project1, false},     // update
+			{acc.Id + 1, project1, true},  // cannot update
+			{acc.Id + 99, project1, true}, // cannot create
+		} {
+			_, err := db.CreateOrUpdateProject(r.AccountId, r.Title)
+			if r.HasError {
+				assert.Error(err)
+			} else {
+				assert.NoError(err)
+			}
+		}
+	})
+}
+
+func TestAccount_FetchProjects(t *testing.T) {
+	t.Parallel()
+	assert := require.New(t)
+
+	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
+		db, err := newTestDb(info, seedAccounts, seedProjects)
+		assert.NoError(err)
+		defer closeDb(db)
+
+		acc, err := db.FetchAccount(admin)
+		assert.NoError(err)
+
+		projects, err := acc.FetchProjects()
+		assert.NoError(err)
+		assert.Greater(len(projects), 0)
+	})
+}
+
 func TestDatabase_DeleteProject(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
@@ -136,6 +191,7 @@ func TestDatabase_DeleteProject(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts, seedProjects)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		for _, r := range []struct {
 			Name     string
@@ -151,6 +207,36 @@ func TestDatabase_DeleteProject(t *testing.T) {
 				assert.NoError(err)
 			}
 		}
+	})
+}
+
+func TestDatabase_CanOwnProject(t *testing.T) {
+	t.Parallel()
+	assert := require.New(t)
+
+	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
+		db, err := newTestDb(info, seedAccounts, seedProjects)
+		assert.NoError(err)
+		defer closeDb(db)
+
+		for _, r := range []struct {
+			Username string
+			Expected bool
+		}{
+			{admin, true},
+			{user1, false},
+		} {
+			acc, err := db.FetchAccount(r.Username)
+			assert.NoError(err)
+
+			actual, err := db.CanOwnProject(acc.Id, project1)
+			assert.NoError(err)
+			assert.Equal(r.Expected, actual)
+		}
+
+		canOwn, err := db.CanOwnProject(1, "ProjectDoesNotExist")
+		assert.NoError(err)
+		assert.True(canOwn)
 	})
 }
 
@@ -187,7 +273,7 @@ func seedProjects(db *Database) error {
 
 	for _, d := range projects {
 		d.AccountId = acc.Id
-		_, err = db.CreateProjects(d)
+		_, err = db.CreateProject(d)
 		if err != nil {
 			return err
 		}

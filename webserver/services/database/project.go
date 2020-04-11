@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/pkg/errors"
@@ -57,7 +58,7 @@ func (d *Database) FetchProjects(accountId int) ([]*Project, error) {
 
 	query := "SELECT id, title, last_update, account_id FROM project"
 	var projects []*Project
-	if accountId < 0 {
+	if accountId <= 0 {
 		return nil, errors.Errorf("Invalid account id '%d'. Use 0 if you want to query everything", accountId)
 	} else if accountId == 0 {
 		err = tx.Select(&projects, query)
@@ -74,7 +75,33 @@ func (d *Database) FetchProjects(accountId int) ([]*Project, error) {
 	}
 }
 
-func (d *Database) CreateProjects(project *Project) (*Project, error) {
+func (d *Database) CreateOrUpdateProject(accountId int, title string) (*Project, error) {
+	var err error
+
+	tx := d.MustBegin()
+	defer tx.Close(err)
+
+	proj := &Project{}
+	err = tx.Get(proj, `SELECT * FROM project WHERE title = $1 AND account_id = $2`, title, accountId)
+
+	switch err {
+	case sql.ErrNoRows:
+		// No such project thus create it. If a project with a similar title but different account exists,
+		// the insertion will run into an error again since title must be unique. Thus the user must check
+		// that the project title does not belong to anyone else with d.CanOwnProject()
+		return d.CreateProject(&Project{
+			Title:     title,
+			AccountId: accountId,
+		})
+	case nil:
+		// Update project
+		return d.UpdateProject(proj)
+	default:
+		return nil, err
+	}
+}
+
+func (d *Database) CreateProject(project *Project) (*Project, error) {
 	err := project.Validate()
 	if err != nil {
 		return nil, err
@@ -128,8 +155,6 @@ func (d *Database) DeleteProject(title string) error {
 	proj, err := d.FetchProject(title)
 	if err != nil {
 		return err
-	} else if proj == nil {
-		return errors.Errorf("No project with title '%s'", title)
 	}
 
 	tx := d.MustBegin()
@@ -138,4 +163,17 @@ func (d *Database) DeleteProject(title string) error {
 	_, err = tx.Exec(`DELETE FROM project WHERE id = $1`, proj.Id)
 
 	return nil
+}
+
+// Verifies if the user can own this project. Project can only be owned if
+// the project does not already belong to another user
+func (d *Database) CanOwnProject(accountId int, title string) (bool, error) {
+	proj, err := d.FetchProject(title)
+	if err == sql.ErrNoRows {
+		return true, nil
+	} else if err != nil {
+		return false, err
+	}
+
+	return proj.AccountId == accountId, nil
 }

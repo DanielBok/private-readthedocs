@@ -9,7 +9,10 @@ import (
 	. "private-sphinx-docs/services/database"
 )
 
-const admin = "admin"
+const (
+	admin = "admin"
+	user1 = "user1"
+)
 
 func TestNewAccount(t *testing.T) {
 	t.Parallel()
@@ -70,6 +73,7 @@ func TestDatabase_CreateAccount(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		for _, acc := range accounts {
 			acc, err := db.CreateAccount(acc.Username, acc.Password, acc.IsAdmin)
@@ -97,6 +101,7 @@ func TestDatabase_FetchAccount(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		for _, r := range []struct {
 			Username string
@@ -123,6 +128,7 @@ func TestDatabase_UpdateAccount(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		for _, r := range []struct {
 			Id       int
@@ -152,6 +158,7 @@ func TestDatabase_DeleteAccount(t *testing.T) {
 	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
 		db, err := newTestDb(info, seedAccounts)
 		assert.NoError(err)
+		defer closeDb(db)
 
 		for _, r := range []struct {
 			Username string
@@ -180,7 +187,7 @@ func mockAccounts() ([]*Account, error) {
 		IsAdmin  bool
 	}{
 		{admin, "password", true},
-		{"user1  ", "password", false},
+		{user1, "password", false},
 		{"user2", "password", false},
 	} {
 		u, err := NewAccount(v.Username, v.Password, v.IsAdmin)
