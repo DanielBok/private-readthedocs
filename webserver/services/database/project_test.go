@@ -95,7 +95,7 @@ func TestDatabase_FetchProject(t *testing.T) {
 	})
 }
 
-func TestDatabase_FetchProjects(t *testing.T) {
+func TestDatabase_FetchUserProjects(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
@@ -107,9 +107,26 @@ func TestDatabase_FetchProjects(t *testing.T) {
 		acc, err := db.FetchAccount(admin)
 		assert.NoError(err)
 
-		projects, err := db.FetchProjects(acc.Id)
+		projects, err := db.FetchUserProjects(acc.Id)
 		assert.NoError(err)
 		assert.Greater(len(projects), 0)
+	})
+}
+
+func TestDatabase_FetchProjects(t *testing.T) {
+	t.Parallel()
+	assert := require.New(t)
+
+	dktest.Run(t, imageName, postgresImageOptions, func(t *testing.T, info dktest.ContainerInfo) {
+		db, err := newTestDb(info, seedAccounts, seedProjects)
+		assert.NoError(err)
+		defer closeDb(db)
+
+		projects, err := db.FetchProjects()
+		assert.NoError(err)
+
+		mocks, _ := mockProjects()
+		assert.Len(projects, len(mocks))
 	})
 }
 

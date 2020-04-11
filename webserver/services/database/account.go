@@ -54,7 +54,7 @@ func (u *Account) SaltPassword() error {
 }
 
 func (u *Account) FetchProjects() ([]*Project, error) {
-	projects, err := u.db.FetchProjects(u.Id)
+	projects, err := u.db.FetchUserProjects(u.Id)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not fetch projects from %s", u.Username)
 	}

@@ -51,28 +51,35 @@ func (d *Database) FetchProject(title string) (*Project, error) {
 	return proj, nil
 }
 
-func (d *Database) FetchProjects(accountId int) ([]*Project, error) {
+func (d *Database) FetchProjects() ([]*Project, error) {
 	var err error
 	tx := d.MustBegin()
 	defer tx.Close(err)
 
-	query := "SELECT id, title, last_update, account_id FROM project"
+	var projects []*Project
+	err = tx.Select(&projects, "SELECT * FROM project")
+	if err != nil {
+		return nil, err
+	}
+
+	return projects, nil
+}
+
+func (d *Database) FetchUserProjects(accountId int) ([]*Project, error) {
+	var err error
+	tx := d.MustBegin()
+	defer tx.Close(err)
+
 	var projects []*Project
 	if accountId <= 0 {
 		return nil, errors.Errorf("Invalid account id '%d'. Use 0 if you want to query everything", accountId)
-	} else if accountId == 0 {
-		err = tx.Select(&projects, query)
-		if err != nil {
-			return nil, err
-		}
-		return projects, nil
-	} else {
-		err = tx.Select(&projects, query+" WHERE account_id = $1", accountId)
-		if err != nil {
-			return nil, err
-		}
-		return projects, nil
 	}
+	err = tx.Select(&projects, "SELECT * FROM project WHERE account_id = $1", accountId)
+	if err != nil {
+		return nil, err
+	}
+
+	return projects, nil
 }
 
 func (d *Database) CreateOrUpdateProject(accountId int, title string) (*Project, error) {
