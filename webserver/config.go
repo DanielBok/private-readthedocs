@@ -108,7 +108,7 @@ func setConfigDirectory() error {
 
 	// set root directory where we're writing the program
 	_, file, _, _ := runtime.Caller(0)
-	workDir := filepath.Dir(filepath.Dir(file))
+	workDir := filepath.Dir(file)
 	viper.AddConfigPath(workDir)
 
 	return nil
