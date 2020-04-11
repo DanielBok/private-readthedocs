@@ -69,6 +69,8 @@ func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 			http.Error(w, err.Error(), 400)
 			return
 		}
+		// mask password
+		account.Password = ""
 
 		toJson(w, account)
 	}
@@ -101,6 +103,7 @@ func (h *AccountHandler) UpdateAccount() http.HandlerFunc {
 			http.Error(w, err.Error(), 400)
 			return
 		}
+		account.Password = ""
 
 		toJson(w, account)
 	}
