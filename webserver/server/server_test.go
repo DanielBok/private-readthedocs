@@ -190,10 +190,10 @@ func (m *MockStore) CreateOrUpdateProject(accountId int, title string) (*db.Proj
 			}
 		}
 		acc.Projects = projects
-		m.accounts[acc.Username] = acc
 
-		m.projects[proj.Title] = proj
 	}
+	m.accounts[acc.Username] = acc
+	m.projects[proj.Title] = proj
 
 	return proj, nil
 }
@@ -209,7 +209,7 @@ func (m *MockStore) DeleteProject(title string) error {
 func (m *MockStore) CanOwnProject(accountId int, title string) (bool, error) {
 	p, err := m.fetchProject(title)
 	if err != nil {
-		return false, err
+		return true, nil
 	}
 	return p.AccountId == accountId, nil
 }

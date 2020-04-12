@@ -220,22 +220,20 @@ func TestDatabase_CanOwnProject(t *testing.T) {
 
 		for _, r := range []struct {
 			Username string
+			Title    string
 			Expected bool
 		}{
-			{admin, true},
-			{user1, false},
+			{admin, project1, true},
+			{user1, project1, false},
+			{user1, "NewProject", true},
 		} {
 			acc, err := db.FetchAccount(r.Username)
 			assert.NoError(err)
 
-			actual, err := db.CanOwnProject(acc.Id, project1)
+			actual, err := db.CanOwnProject(acc.Id, r.Title)
 			assert.NoError(err)
 			assert.Equal(r.Expected, actual)
 		}
-
-		canOwn, err := db.CanOwnProject(1, "ProjectDoesNotExist")
-		assert.NoError(err)
-		assert.True(canOwn)
 	})
 }
 

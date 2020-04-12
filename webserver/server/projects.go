@@ -102,26 +102,20 @@ func (h *ProjectHandler) DeleteProject() http.HandlerFunc {
 			return
 		}
 
-		var p *DeleteProjectPayload
-		err = readJson(r, &p)
+		title := chi.URLParam(r, "title")
+		err = h.canManageProject(acc, title)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		err = h.canManageProject(acc, p.Title)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-
-		err = h.DB.DeleteProject(p.Title)
+		err = h.DB.DeleteProject(title)
 		if err != nil {
 			http.Error(w, errors.Wrap(err, "could not delete project").Error(), 400)
 			return
 		}
 
-		err = h.FS.Remove(p.Title)
+		err = h.FS.Remove(title)
 		if err != nil {
 			http.Error(w, errors.Wrap(err, "could not delete static files").Error(), 400)
 			return

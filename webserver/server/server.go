@@ -85,7 +85,7 @@ func attachHandlers(r *chi.Mux, option Option) {
 			r.Get("/", handler.FetchProjects())           // get all projects
 			r.Get("/{username}", handler.FetchProjects()) // get all user projects
 			r.Post("/", handler.UploadProject())          // upload new project (create / update)
-			r.Delete("/", handler.DeleteProject())        // removes project
+			r.Delete("/{title}", handler.DeleteProject()) // removes project
 		})
 	})
 
