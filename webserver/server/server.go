@@ -1,16 +1,12 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"github.com/pkg/errors"
-
-	db "private-sphinx-docs/services/database"
 )
 
 type subdomain string
@@ -73,7 +69,7 @@ func apiRouter(option Option) *chi.Mux {
 		r.Route("/account", func(r chi.Router) {
 			handler := AccountHandler{DB: store, FS: fs}
 
-			r.Get("/validate", handler.ValidateAccount())
+			r.Get("/", handler.ValidateAccount())
 			r.Post("/", handler.CreateAccount())
 			r.Put("/", handler.UpdateAccount())
 			r.Delete("/{username}", handler.DeleteAccount())
@@ -109,43 +105,4 @@ func StatusCheck(version string) http.HandlerFunc {
 			Version string `json:"version"`
 		}{"Okay", version})
 	}
-}
-
-func toJson(w http.ResponseWriter, object interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(object); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-}
-
-func readJson(r *http.Request, object interface{}) error {
-	if err := json.NewDecoder(r.Body).Decode(object); err != nil {
-		return err
-	}
-	return nil
-}
-
-func ok(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusOK)
-	if _, err := fmt.Fprint(w, "Okay"); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func authenticate(store IStore, r *http.Request) (*db.Account, error) {
-	username, password, ok := r.BasicAuth()
-	if !ok {
-		return nil, errors.New("authorization not set in request")
-	}
-
-	account, err := store.FetchAccount(username)
-	if err != nil {
-		return nil, errors.Wrap(err, "server error: could not fetch account")
-	}
-	if !account.HasValidPassword(password) {
-		return nil, errors.New("invalid credentials")
-	}
-
-	return account, nil
 }

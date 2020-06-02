@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	. "private-sphinx-docs/server"
+	"private-sphinx-docs/server/dto"
 	db "private-sphinx-docs/services/database"
 )
 
@@ -75,41 +76,43 @@ func TestAccountHandler_UpdateAccount(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
+	type User struct {
+		Username string
+		Password string
+	}
+
+	admin := User{"admin", "password"}
+	user1 := User{"user1", "password"}
+	user9 := User{"user9", "badPassword"}
+
 	for _, s := range []struct {
-		UseAdmin    bool
-		OldUsername string
-		IsAdmin     bool
-		Password    string
-		StatusCode  int
+		Requester  User
+		IsAdmin    bool
+		StatusCode int
 	}{
-		{false, "user1", false, "password", http.StatusOK},
-		{false, "user1", true, "password", http.StatusOK},
-		{true, "user1", true, "password", http.StatusOK},
-		{true, "user1", false, "password", http.StatusOK},
-		{false, "user1", false, "badPwd", http.StatusBadRequest},
-		{false, "badUid", false, "password", http.StatusBadRequest},
+		{user1, false, http.StatusOK}, // changed, but not admin
+		{user1, true, http.StatusOK},  // change but not admin
+		{admin, true, http.StatusOK},  // changed and is admin
+		{admin, false, http.StatusOK},
+		{user9, false, http.StatusForbidden},
+		{user9, false, http.StatusForbidden},
 	} {
 		handler := NewAccountHandler()
-		user1, err := handler.DB.CreateAccount("user1", "password", false)
+		// seed user
+		acc, err := handler.DB.CreateAccount(user1.Username, user1.Password, false)
 		assert.NoError(err)
 
 		var buf bytes.Buffer
-		err = json.NewEncoder(&buf).Encode(&UpdateAccountPayload{
-			Credentials: &Credentials{
-				Username: "NewUsername",
-				Password: "NewPassword",
-			},
-			OldUsername: s.OldUsername,
-			IsAdmin:     s.IsAdmin,
+		err = json.NewEncoder(&buf).Encode(&dto.AccountUpdate{
+			Id:       acc.Id,
+			Username: "NewUsername",
+			Password: "NewPassword",
+			IsAdmin:  s.IsAdmin,
 		})
 		assert.NoError(err)
 
 		r := NewTestRequest("PUT", "/", &buf, nil)
-		if s.UseAdmin {
-			r.SetBasicAuth("admin", "password")
-		} else {
-			r.SetBasicAuth(user1.Username, s.Password)
-		}
+		r.SetBasicAuth(s.Requester.Username, s.Requester.Password)
 
 		w := httptest.NewRecorder()
 		handler.UpdateAccount()(w, r)
@@ -122,9 +125,12 @@ func TestAccountHandler_UpdateAccount(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&result)
 			assert.NoError(err)
 			assert.Empty(result.Password)
+
 			assert.Equal("NewUsername", result.Username)
-			if s.UseAdmin {
-				assert.Equal(s.IsAdmin, result.IsAdmin)
+
+			// only admin can set IsAdmin field
+			if s.Requester == admin {
+				assert.Equal(result.IsAdmin, s.IsAdmin)
 			} else {
 				assert.False(result.IsAdmin)
 			}
@@ -147,8 +153,8 @@ func TestAccountHandler_DeleteAccount(t *testing.T) {
 		{false, "user1", "password", http.StatusOK},
 		{true, "user1", "password", http.StatusOK},
 		{true, "user1", "badPwd", http.StatusOK},
-		{false, "user1", "badPwd", http.StatusBadRequest},
-		{false, "user2", "password", http.StatusBadRequest},
+		{false, "user1", "badPwd", http.StatusForbidden},
+		{false, "user2", "password", http.StatusForbidden},
 	} {
 		handler := NewAccountHandler()
 		_, err := handler.DB.CreateAccount("user1", "password", false)
@@ -184,18 +190,15 @@ func TestAccountHandler_ValidateAccount(t *testing.T) {
 		StatusCode int
 	}{
 		{"user1", "password", http.StatusOK},
-		{"user1", "badPwd", http.StatusBadRequest},
-		{"user2", "password", http.StatusBadRequest},
+		{"user1", "badPwd", http.StatusForbidden},
+		{"user2", "password", http.StatusForbidden},
 	} {
-		var buf bytes.Buffer
-		err = json.NewEncoder(&buf).Encode(&Credentials{
-			Username: s.Uid,
-			Password: s.Pwd,
-		})
 		assert.NoError(err)
 
-		r := NewTestRequest("POST", "/validate", &buf, nil)
+		r := NewTestRequest("POST", "/", nil, nil)
+		r.SetBasicAuth(s.Uid, s.Pwd)
 		w := httptest.NewRecorder()
+
 		handler.ValidateAccount()(w, r)
 		assert.Equal(s.StatusCode, w.Code)
 	}

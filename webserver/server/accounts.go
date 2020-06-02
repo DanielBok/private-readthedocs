@@ -2,12 +2,12 @@ package server
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
 
+	"private-sphinx-docs/server/dto"
 	db "private-sphinx-docs/services/database"
 )
 
@@ -16,20 +16,9 @@ type AccountHandler struct {
 	FS IFileHandler
 }
 
-type Credentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type UpdateAccountPayload struct {
-	*Credentials
-	OldUsername string `json:"oldUsername"`
-	IsAdmin     bool   `json:"isAdmin"`
-}
-
 func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var p *db.Account
+		var p *dto.Account
 		err := readJson(r, &p)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
@@ -37,11 +26,10 @@ func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 		}
 
 		isAdmin := false
-		// get requester, if there's an error, it just means that requester is not
-		// admin user
+		// get requester, if there's an error, it just means that requester is not admin user
 		req, err := authenticate(h.DB, r)
 		if err == nil && req != nil && req.IsAdmin {
-			// only allow isAdmin to potentially be true if requester is admin
+			// only allow admin to set admin
 			isAdmin = p.IsAdmin
 		}
 
@@ -65,49 +53,33 @@ func (h *AccountHandler) CreateAccount() http.HandlerFunc {
 }
 
 func (h *AccountHandler) UpdateAccount() http.HandlerFunc {
-	formAccount := func(req *db.Account, p *UpdateAccountPayload) (*db.Account, error) {
-		account, err := h.DB.FetchAccount(p.OldUsername)
-		if err != nil {
-			return nil, err
-		}
-
-		if !(req.IsAdmin || req.Username == account.Username) {
-			return nil, errors.New("Unauthorized to make changes")
-		}
-
-		account.Username = strings.TrimSpace(p.Username)
-		account.Password = strings.TrimSpace(p.Password)
-
-		if req.IsAdmin {
-			account.IsAdmin = p.IsAdmin
-		}
-
-		return account, nil
-	}
-
 	return func(w http.ResponseWriter, r *http.Request) {
-		var p *UpdateAccountPayload
-		err := readJson(r, &p)
+		account, err := authenticate(h.DB, r)
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			Forbid(w, r)
 			return
 		}
 
-		req, err := authenticate(h.DB, r)
+		var p *dto.AccountUpdate
+		err = readJson(r, &p)
 		if err != nil {
-			http.Error(w, errors.Wrap(err, "invalid requester").Error(), 400)
+			BadRequest(w, err)
 			return
 		}
 
-		acc, err := formAccount(req, p)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
+		// check that user can change account. If requester is admin, can change everything.
+		// Otherwise, ensure that the requester is changing the same account (by id)
+		if !(account.IsAdmin || account.Id == p.Id) {
+			Forbid(w, r)
 			return
 		}
+		if !account.IsAdmin {
+			p.IsAdmin = false
+		}
 
-		account, err := h.DB.UpdateAccount(acc)
+		account, err = h.DB.UpdateAccount(p.Cast())
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			BadRequest(w, err)
 			return
 		}
 		account.Password = ""
@@ -128,53 +100,55 @@ func (h *AccountHandler) DeleteAccount() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		req, err := authenticate(h.DB, r)
+		account, err := authenticate(h.DB, r)
 		if err != nil {
-			http.Error(w, errors.Wrap(err, "invalid requester").Error(), 400)
+			Forbid(w, r)
 			return
 		}
 
 		username := chi.URLParam(r, "username")
-		if !(req.IsAdmin || req.Username == username) {
-			http.Error(w, "invalid credentials to remove account", 400)
+		if !(account.IsAdmin || account.Username == username) {
+			Forbid(w, r)
 			return
 		}
 
-		account, err := h.DB.DeleteAccount(username)
+		// all validation done, now we get the account
+		account, err = h.DB.FetchAccount(username)
+		if err != nil {
+			BadRequest(w, err)
+			return
+		}
+
+		projects, err := h.DB.FetchProjectsByAccount(account.Id)
+		if err != nil {
+			BadRequest(w, err)
+			return
+		}
+
+		err = removeProjectFiles(projects)
+		if err != nil {
+			BadRequest(w, err)
+			return
+		}
+
+		err = h.DB.DeleteAccount(username)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
-		err = removeProjectFiles(account.Projects)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-
-		ok(w)
+		Ok(w, r)
 	}
 }
 
 func (h *AccountHandler) ValidateAccount() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var p *Credentials
-		err := readJson(r, &p)
+		_, err := authenticate(h.DB, r)
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			Forbid(w, r)
 			return
 		}
 
-		acc, err := h.DB.FetchAccount(p.Username)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return
-		}
-		if !acc.HasValidPassword(p.Password) {
-			http.Error(w, "invalid credentials", 400)
-			return
-		}
-
-		ok(w)
+		Ok(w, r)
 	}
 }

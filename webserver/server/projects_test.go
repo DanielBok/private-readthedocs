@@ -79,7 +79,7 @@ func TestProjectHandler_UploadProject(t *testing.T) {
 	}{
 		{"user1", "password", "NewProject", http.StatusOK},
 		{"user1", "password", "NewProject2", http.StatusOK},
-		{"user1", "badPwd", "NewProject", http.StatusBadRequest},
+		{"user1", "badPwd", "NewProject", http.StatusForbidden},
 	} {
 		// setup
 		body, contentType, err := createUploadPackagePayload(s.Title)
@@ -140,8 +140,8 @@ func TestProjectHandler_DeleteProject(t *testing.T) {
 		StatusCode int
 	}{
 		{user1, password, title, http.StatusOK},
-		{"admin", password, title, http.StatusOK},
-		{user1, password, "project1", http.StatusBadRequest},
+		{"admin", "password", title, http.StatusOK},
+		{user1, password, "project1", http.StatusForbidden},
 		{user1, password, "DoesNotExist", http.StatusBadRequest},
 	} {
 		// setup

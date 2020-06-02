@@ -26,7 +26,7 @@ func (h *ProjectHandler) FetchProjects() http.HandlerFunc {
 		if username == "" {
 			projects, err := h.DB.FetchProjects()
 			if err != nil {
-				http.Error(w, err.Error(), 400)
+				BadRequest(w, err)
 				return
 			}
 
@@ -34,13 +34,13 @@ func (h *ProjectHandler) FetchProjects() http.HandlerFunc {
 		} else {
 			acc, err := h.DB.FetchAccount(username)
 			if err != nil {
-				http.Error(w, err.Error(), 400)
+				BadRequest(w, err)
 				return
 			}
 
 			projects, err := h.DB.FetchProjectsByAccount(acc.Id)
 			if err != nil {
-				http.Error(w, err.Error(), 400)
+				BadRequest(w, err)
 				return
 			}
 			toJson(w, projects)
@@ -50,9 +50,9 @@ func (h *ProjectHandler) FetchProjects() http.HandlerFunc {
 
 func (h *ProjectHandler) UploadProject() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		acc, err := authenticate(h.DB, r)
+		account, err := authenticate(h.DB, r)
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			Forbid(w, r)
 			return
 		}
 
@@ -63,14 +63,14 @@ func (h *ProjectHandler) UploadProject() http.HandlerFunc {
 		}
 
 		title := r.PostFormValue("title")
-		err = h.canManageProject(acc, title)
+		err = h.canManageProject(account, title)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
 
 		// save details in database
-		project, err := h.DB.CreateOrUpdateProject(acc.Id, title)
+		project, err := h.DB.CreateOrUpdateProject(account.Id, title)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -96,32 +96,32 @@ func (h *ProjectHandler) UploadProject() http.HandlerFunc {
 
 func (h *ProjectHandler) DeleteProject() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		acc, err := authenticate(h.DB, r)
+		account, err := authenticate(h.DB, r)
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			Forbid(w, r)
 			return
 		}
 
 		title := chi.URLParam(r, "title")
-		err = h.canManageProject(acc, title)
+		err = h.canManageProject(account, title)
 		if err != nil {
-			http.Error(w, err.Error(), 400)
+			Forbid(w, r)
 			return
 		}
 
 		err = h.DB.DeleteProject(title)
 		if err != nil {
-			http.Error(w, errors.Wrap(err, "could not delete project").Error(), 400)
+			BadRequest(w, err)
 			return
 		}
 
 		err = h.FS.Remove(title)
 		if err != nil {
-			http.Error(w, errors.Wrap(err, "could not delete static files").Error(), 400)
+			BadRequest(w, err)
 			return
 		}
 
-		ok(w)
+		Ok(w, r)
 	}
 }
 
