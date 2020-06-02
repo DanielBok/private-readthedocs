@@ -3,8 +3,8 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -13,29 +13,12 @@ import (
 	db "private-sphinx-docs/services/database"
 )
 
-type IStore interface {
-	FetchAccount(username string) (*db.Account, error)
-	FetchAccounts() ([]*db.Account, error)
-	CreateAccount(username, password string, isAdmin bool) (*db.Account, error)
-	UpdateAccount(account *db.Account) (*db.Account, error)
-	DeleteAccount(username string) (*db.Account, error)
+type subdomain string
 
-	FetchProjects() ([]*db.Project, error)
-	FetchProjectsByAccount(accountId int) ([]*db.Project, error)
-	CreateOrUpdateProject(accountId int, title string) (*db.Project, error)
-	DeleteProject(title string) error
-	CanOwnProject(accountId int, title string) (bool, error)
-}
-
-type IFileHandler interface {
-	// Decompresses the uplaoded zip file and saves it
-	Upload(r io.ReaderAt, name string, size int64) error
-	// Gets the destination path for the static files
-	Destination(name string) string
-	// Remove the project files
-	Remove(name string) error
-	Source() string
-}
+const (
+	main subdomain = "main"
+	docs subdomain = "docs"
+)
 
 type Option struct {
 	Version     string
@@ -44,14 +27,28 @@ type Option struct {
 	FileHandler IFileHandler
 }
 
+type SubDomains map[subdomain]http.Handler
+
+func (s SubDomains) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	urlParts := strings.Split(r.Host, ".")
+	switch len(urlParts) {
+	case 1:
+		s[main].ServeHTTP(w, r)
+	case 2:
+		s[docs].ServeHTTP(w, r)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
 func New(option Option) (*http.Server, error) {
-	r := chi.NewRouter()
-	attachMiddleware(r)
-	attachHandlers(r, option)
+	subdomains := make(SubDomains)
+	subdomains[main] = apiRouter(option)
+	subdomains[docs] = docRouter(option)
 
 	return &http.Server{
 		Addr:    fmt.Sprintf(":%d", option.Port),
-		Handler: r,
+		Handler: subdomains,
 	}, nil
 }
 
@@ -64,10 +61,12 @@ func attachMiddleware(r *chi.Mux) {
 	)
 }
 
-func attachHandlers(r *chi.Mux, option Option) {
+func apiRouter(option Option) *chi.Mux {
+	r := chi.NewRouter()
 	store := option.Store
 	fs := option.FileHandler
 
+	attachMiddleware(r)
 	r.Get("/__status", StatusCheck(option.Version))
 
 	r.Route("/api", func(r chi.Router) {
@@ -89,9 +88,18 @@ func attachHandlers(r *chi.Mux, option Option) {
 		})
 	})
 
+	return r
+}
+
+func docRouter(option Option) *chi.Mux {
+	r := chi.NewRouter()
+	attachMiddleware(r)
+
 	handler := DocumentationHandler{option.FileHandler.Source()}
 	handler.MustInit()
-	r.Get("/*", handler.FileServer())
+	r.Handle("/*", handler.FileServer())
+
+	return r
 }
 
 func StatusCheck(version string) http.HandlerFunc {

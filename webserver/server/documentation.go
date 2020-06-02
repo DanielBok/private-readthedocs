@@ -3,9 +3,11 @@ package server
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi"
+	log "github.com/sirupsen/logrus"
 
 	"private-sphinx-docs/libs"
 )
@@ -24,9 +26,14 @@ func (h *DocumentationHandler) MustInit() {
 }
 
 func (h *DocumentationHandler) FileServer() http.HandlerFunc {
-	fileServer := http.FileServer(http.Dir(h.Root))
+	log.Infof("Serving doc files from root folder: %s", h.Root)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		// The package name
+		name := strings.Split(r.Host, ".")[0]
+		root := http.Dir(filepath.Join(h.Root, name))
+		fileServer := http.FileServer(root)
+
 		ctx := chi.RouteContext(r.Context())
 		pathPrefix := strings.TrimSuffix(ctx.RoutePattern(), "/*")
 		fs := http.StripPrefix(pathPrefix, fileServer)
