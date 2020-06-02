@@ -29,6 +29,7 @@ type Config struct {
 		Password string `mapstructure:"password"`
 		DbName   string `mapstructure:"db_name"`
 		SSLMode  string `mapstructure:"ssl_mode"`
+		Migrate  bool   `mapstructure:"migrate"`
 	} `mapstructure:"database"`
 
 	StaticFile struct {

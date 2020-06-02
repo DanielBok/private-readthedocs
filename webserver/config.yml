@@ -11,6 +11,7 @@ database:
   password: password
   db_name: postgres
   ssl_mode: disable
+  migrate: true
 
 static_file:
   type: filesys

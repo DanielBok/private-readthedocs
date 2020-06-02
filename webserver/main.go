@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
 
@@ -24,6 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	fh, err := createFileHandler(config)
 	if err != nil {
 		log.Fatal(err)
@@ -32,6 +34,14 @@ func main() {
 	store, err := db.New(config.DbOption())
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if config.Database.Migrate {
+		err = store.Migrate()
+		if err != nil {
+			log.Fatal(errors.Wrap(err, "could not migrate database"))
+		}
+		log.Info("Migrated database to latest version")
 	}
 
 	srv, err := server.New(server.Option{
