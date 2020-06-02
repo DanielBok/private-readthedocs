@@ -189,12 +189,11 @@ func TestDatabase_DeleteAccount(t *testing.T) {
 			{admin, false},
 			{"UserDoesNotExist", true},
 		} {
-			acc, err := db.DeleteAccount(r.Username)
+			err := db.DeleteAccount(r.Username)
 			if r.HasError {
 				assert.Error(err)
 			} else {
 				assert.NoError(err)
-				assert.IsType(&Account{}, acc)
 			}
 		}
 	})

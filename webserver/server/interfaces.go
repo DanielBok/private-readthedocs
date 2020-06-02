@@ -11,7 +11,7 @@ type IStore interface {
 	FetchAccounts() ([]*db.Account, error)
 	CreateAccount(username, password string, isAdmin bool) (*db.Account, error)
 	UpdateAccount(account *db.Account) (*db.Account, error)
-	DeleteAccount(username string) (*db.Account, error)
+	DeleteAccount(username string) error
 
 	FetchProjects() ([]*db.Project, error)
 	FetchProjectsByAccount(accountId int) ([]*db.Project, error)

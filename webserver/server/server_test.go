@@ -107,14 +107,14 @@ func (m *MockStore) fetchAccount(id int) (*db.Account, error) {
 	return nil, errors.New("account does not exist")
 }
 
-func (m *MockStore) DeleteAccount(username string) (*db.Account, error) {
-	acc, exist := m.accounts[username]
+func (m *MockStore) DeleteAccount(username string) error {
+	_, exist := m.accounts[username]
 	if !exist {
-		return nil, errors.New("account does not exist")
+		return errors.New("account does not exist")
 	}
 
 	delete(m.accounts, username)
-	return acc, nil
+	return nil
 }
 
 func (m *MockStore) FetchProjects() ([]*db.Project, error) {

@@ -58,7 +58,7 @@ func (d *Database) FetchAccount(username string) (*Account, error) {
 	defer tx.Close(err)
 
 	acc := &Account{}
-	err = tx.Get(acc, "SELECT * FROM account WHERE username = $1", username)
+	err = tx.Get(acc, "select * from ACCOUNT where USERNAME = $1", username)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (d *Database) FetchAccounts() ([]*Account, error) {
 	defer tx.Close(err)
 
 	var accounts []*Account
-	err = tx.Select(&accounts, "SELECT * FROM account")
+	err = tx.Select(&accounts, "select * from ACCOUNT")
 	if err != nil {
 		return nil, err
 	}
@@ -100,9 +100,9 @@ func (d *Database) CreateAccount(username, password string, isAdmin bool) (*Acco
 	defer tx.Close(err)
 
 	rows, err := tx.NamedQuery(`
-INSERT INTO account (username, password, is_admin) 
-VALUES (:username, :password, :is_admin)
-RETURNING id
+insert into ACCOUNT (USERNAME, PASSWORD, IS_ADMIN) 
+values (:username, :password, :is_admin)
+returning ID
 `, *account)
 	if err != nil {
 		return nil, err
@@ -146,26 +146,17 @@ WHERE id = :id;
 	return account, nil
 }
 
-func (d *Database) DeleteAccount(username string) (*Account, error) {
-	acc, err := d.FetchAccount(username)
-	if err != nil {
-		return nil, err
-	}
-
-	acc.Projects, err = d.FetchProjectsByAccount(acc.Id)
-	if err != nil {
-		return nil, err
-	}
-
+func (d *Database) DeleteAccount(username string) error {
+	var err error
 	tx := d.MustBegin()
 	defer tx.Close(err)
 
 	n, err := tx.Exec("DELETE FROM account WHERE username = $1", username)
 	if err != nil {
-		return nil, err
+		return err
 	} else if n == 0 {
-		return nil, errors.Errorf("no account with username: '%s'", username)
+		return errors.Errorf("no account with username: '%s'", username)
 	}
 
-	return acc, nil
+	return nil
 }
