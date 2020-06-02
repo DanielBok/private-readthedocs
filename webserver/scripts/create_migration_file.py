@@ -34,6 +34,7 @@ func generateMigrationFiles() (string, error) {
 		/*CONTENT*/
 	}
 
+	n := 0
 	for title, content := range _migrations {
 		fp := filepath.Join(folder, fmt.Sprintf("%s.up.sql", title))
 
@@ -46,10 +47,13 @@ func generateMigrationFiles() (string, error) {
 			if err != nil {
 				return "", errors.Wrapf(err, "error writing content '%s' to file: %s", content, title)
 			}
+			n++
 		}
 	}
 
-	log.Printf("generated %d migration scripts", len(_migrations))
+	log.Printf("generated %d/%d migration scripts", n, len(_migrations))
+	log.Printf("note: it is okay not to generate migration scripts, it just means it already exists")
+	log.Printf("applying %d levels of migration", len(_migrations))
 
 	return fmt.Sprintf("file://%s", strings.Replace(folder, `\`, "/", -1)), nil
 }
