@@ -1,5 +1,6 @@
 app:
   port: 2000
+  doc_folder: /var/readthedocs
   tls:
     cert_file:
     key_file:
@@ -12,8 +13,3 @@ database:
   db_name: postgres
   ssl_mode: disable
   migrate: true
-
-static_file:
-  type: filesys
-  source: C://temp/psd
-

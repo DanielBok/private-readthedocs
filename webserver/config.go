@@ -15,8 +15,9 @@ import (
 
 type Config struct {
 	App struct {
-		Port int `mapstructure:"port"`
-		TLS  struct {
+		Port      int    `mapstructure:"port"`
+		DocFolder string `mapstructure:"doc_folder"`
+		TLS       struct {
 			CertFile string `mapstructure:"cert_file"`
 			KeyFile  string `mapstructure:"key_file"`
 		} `mapstructure:"tls"`
@@ -31,11 +32,6 @@ type Config struct {
 		SSLMode  string `mapstructure:"ssl_mode"`
 		Migrate  bool   `mapstructure:"migrate"`
 	} `mapstructure:"database"`
-
-	StaticFile struct {
-		Type   string `mapstructure:"type"`
-		Source string `mapstructure:"source"`
-	} `mapstructure:"static_file"`
 }
 
 func (c *Config) DbOption() *db.DbOption {

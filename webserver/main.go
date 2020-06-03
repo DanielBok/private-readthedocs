@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
@@ -26,7 +25,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fh, err := createFileHandler(config)
+	fh, err := sf.NewFileSys(config.App.DocFolder)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -60,15 +59,6 @@ func main() {
 	runServer(srv, config)
 	<-done
 
-}
-
-func createFileHandler(config *Config) (server.IFileHandler, error) {
-	switch t := strings.ToLower(config.StaticFile.Type); t {
-	case "filesys":
-		return sf.NewFileSys(config.StaticFile.Source)
-	default:
-		return nil, errors.Errorf("Unknown static file handler type: %s", t)
-	}
 }
 
 func runServer(srv *http.Server, config *Config) {
