@@ -1,10 +1,14 @@
-.phony: start stop build migrate
+.phony: start stop image build migrate
 
 start: stop
 	docker-compose -p psd up -d
 
 stop:
 	docker-compose -p psd down
+
+image:
+	docker image build -t danielbok/readthedocs:1.0 .
+
 
 build:
 	go generate

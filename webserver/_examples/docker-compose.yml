@@ -1,0 +1,29 @@
+# for development purposes only
+version: "3.7"
+
+services:
+  db:
+    image: postgres:12-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    volumes:
+      - app_data:/var/lib/postgresql/data
+  app:
+    image: danielbok/readthedocs:1.0
+    restart: always
+    volumes:
+      # bind a volume on the image with a volume in the host
+      - /var/readthedocs:/var/readthedocs
+    environment:
+      DATABASE.HOST: db
+    ports:
+      # default app (in container) is 2000
+      - "3000:2000"
+    depends_on:
+      - db
+
+volumes:
+  app_data:

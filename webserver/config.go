@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -83,17 +84,34 @@ func ReadConfig() (*Config, error) {
 }
 
 func setConfigDirectory() error {
-	// Set os specific directory to store config file. This usually is reserved for
-	// instances where we full write permissions on the machine
-	switch runtime.GOOS {
-	case "windows":
-		viper.AddConfigPath("C:/temp/psd")
-	case "linux":
-		viper.AddConfigPath("/var/psd")
+	// this is where the default config file is placed in the docker image
+	viper.AddConfigPath("/app")
 
-	default:
-		return errors.Errorf("Unsupported platform: %s", runtime.GOOS)
+	// this is where the user specified (via env var) config file is place
+	if fp := os.Getenv("PSD_CONFIG_FILE_PATH"); libs.PathExists(fp) {
+		if libs.PathType(fp) == libs.File {
+			// if user specified the config file directly, change file name to config.yaml
+			// and set path to the parent directory
+			dir, name := filepath.Split(fp)
+
+			if name = strings.ToLower(name); name != "config.yml" {
+				err := os.Rename(fp, filepath.Join(dir, "config.yml"))
+				if err != nil {
+					return errors.Wrapf(err, "unable to rename user given config file at %s to config.yml", fp)
+				}
+			}
+			viper.AddConfigPath(dir)
+		} else {
+			viper.AddConfigPath(fp)
+		}
 	}
+
+	// search for the config file where the application binary is
+	workDir, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	viper.AddConfigPath(filepath.Dir(workDir))
 
 	// alternative path to store the config file. This is used in cases where the
 	// user does not have full write permissions
@@ -105,7 +123,7 @@ func setConfigDirectory() error {
 
 	// set root directory where we're writing the program
 	_, file, _, _ := runtime.Caller(0)
-	workDir := filepath.Dir(file)
+	workDir = filepath.Dir(file)
 	viper.AddConfigPath(workDir)
 
 	return nil
